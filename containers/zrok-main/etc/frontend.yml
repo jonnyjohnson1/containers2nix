@@ -1,0 +1,69 @@
+# The `v` field determines the configuration version. When software is released that changes the structure of the
+# configuration, the software will expect this field to be incremented. This protects you against invalid configuration
+# versions and will refer to you to the documentation when the configuration structure changes.
+#
+v: 3
+
+# Setting the `host_match` setting will cause a `zrok access public` to ignore `Host` headers that do not contain the
+# configured string. This will allow you to let a load balancer access the frontend by IP address for health check
+# purposes, and will allow `Host` headers that match the configured DNS name to be routed through `zrok`.
+#
+#host_match: zrok.io
+
+# Configure interstitial pages for this frontend. The interstitial page presents a warning to internet users, alerting
+# them to the fact that they're visiting a zrok share.
+#
+#interstitial:
+#  # Enable or disable interstitial pages on this frontend.
+#  #
+#  enabled: true
+#
+#  # Specify a path to an external HTML file containing the interstitial page. Leaving out of configuration will fall back
+#  # to embedded interstitial HTML. See `endpoints/publicProxy/interstitialUi/index.html` for details on how the page works.
+#  #
+#  html_path: /some/path/to/interstitial.html
+# 
+#  # Specify a list of User-Agent prefixes that should receive the interstitial page. If interstitial pages are enabled
+#  # and this list is not set, all user agents will receive an interstitial page.
+#  #
+#  user_agent_prefixes:
+#    - "Mozilla/5.0"
+
+# The OAuth configuration is used when enabling OAuth authentication with your public frontend.
+#
+#oauth:
+#  # `bind_address` is the <address:port> of the interface where the OAuth frontend listener should
+#  # bind
+#  #
+#  bind_address: 127.0.0.1:8181
+#
+#  # `redirect_url` is the <scheme://address[:port]> of the URL where OAuth requests should be directed.
+#  #
+#  redirect_url: https://oauth.zrok.io
+#
+#  # `cookie_domain` is the domain where the authentication cookies should be applied. Should likely match
+#  # the `host_match` specified above.
+#  #
+#  cookie_domain: zrok.io
+#
+#  # `hash_key` is a unique key for your installation that is used to secure authentication payloads
+#  # with OAuth providers.
+#  #
+#  hash_key: "<yourRandomHashKey>"
+#
+#  # `providers` contains an array of provider details enabled in your installation. Currently only
+#  # `google` and `github` are supported. Your configuration can include `google`, `github`, or both.
+#  #
+#  providers:
+#    - name: google
+#      client_id: <client-id>
+#      client_secret: <client-secret>
+#    - name: github
+#      client_id: <client-id>
+#      client_secret: <client-secret>
+#
+# The `tls` section sets the cert and key to use and enables serving over HTTPS
+#
+#tls:
+#  cert_path: "/Path/To/Cert/zrok.crt"
+#  key_path:  "/Path/To/Cert/zrok.key"

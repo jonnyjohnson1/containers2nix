@@ -1,0 +1,7 @@
+You have a working example of compose2nix working within draft_flake.
+Yuu are now migrating this code to use process-compose like how Luc built the other service.
+
+Presently, it appears to work-ish.
+
+Seems you need to do the building upfront, and then launch the code in the second half.
+Resume here later.

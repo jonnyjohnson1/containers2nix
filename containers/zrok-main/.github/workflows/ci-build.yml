@@ -1,0 +1,139 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
+
+# cancel older, redundant builds that haven't started yet
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  ubuntu-build:
+    name: Build Linux AMD64 CLI
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+
+      - name: install ui node modules
+        shell: bash
+        run: npm install
+        working-directory: ui
+
+      - name: build node ui
+        shell: bash
+        run: npm run build
+        working-directory: ui
+        env:
+          CI: "true"
+          
+      - name: go install
+        shell: bash
+        run: go install -ldflags "-X github.com/openziti/zrok/build.Version=${{ github.ref }} -X github.com/openziti/zrok/build.Hash=${{ github.sha }}" ./...
+
+      - name: go test
+        shell: bash
+        run: go test -v ./...
+
+      - name: setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10' 
+
+      - name: python deps
+        shell: bash
+        run: python -m pip install -U pip flake8
+
+      - name: python lint
+        shell: bash
+        run: flake8 sdk/python/sdk/zrok
+
+      - name: solve GOBIN
+        id: solve_go_bin
+        shell: bash
+        run: |
+          echo DEBUG: go_path="$(go env GOPATH)"
+          echo go_bin="$(go env GOPATH)/bin" >> $GITHUB_OUTPUT
+
+      - name: upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64
+          path: ${{ steps.solve_go_bin.outputs.go_bin }}/zrok
+          if-no-files-found: error
+
+  # build a release candidate container image for branches named "main" or like "v*"
+  rc-container-build:
+    needs: ubuntu-build
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/v')
+    name: Build Release Candidate Container Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set a container image tag from the branch name
+        id: slug
+        shell: bash
+        run: |
+          echo branch_tag=$(sed 's/[^a-z0-9_-]/__/gi' <<< "${GITHUB_REF#refs/heads/}") >> $GITHUB_OUTPUT
+
+      - name: Checkout Workspace
+        uses: actions/checkout@v4
+
+      - name: Download Branch Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-amd64
+          path: ./dist/amd64/linux/
+
+      - name: Set Up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: amd64,arm64
+
+      - name: Set Up Docker BuildKit
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_HUB_API_USER || secrets.DOCKER_HUB_API_USER }}
+          password: ${{ secrets.DOCKER_HUB_API_TOKEN }}
+
+      - name: Set Up Container Image Tags for zrok CLI Container
+        env:
+          ZROK_CONTAINER_IMAGE_REPO: ${{ vars.ZROK_CONTAINER_IMAGE_REPO || 'openziti/zrok' }}
+          ZROK_CONTAINER_IMAGE_TAG: ${{ steps.slug.outputs.branch_tag }}
+        id: tagprep_cli
+        shell: bash
+        run: |
+          echo DOCKER_TAGS="${ZROK_CONTAINER_IMAGE_REPO}:${ZROK_CONTAINER_IMAGE_TAG}" \
+          | tee -a $GITHUB_OUTPUT
+
+      - name: Build & Push Linux AMD64 CLI Container Image to Hub
+        uses: docker/build-push-action@v3
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: ${{ github.workspace }}/
+          file: ${{ github.workspace }}/docker/images/zrok/Dockerfile
+          platforms: linux/amd64
+          tags: ${{ steps.tagprep_cli.outputs.DOCKER_TAGS }}
+          build-args: |
+            DOCKER_BUILD_DIR=./docker/images/zrok
+            ARTIFACTS_DIR=./dist
+          push: true
